@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LOTUSim Maritime AutoLock 3D Digital Twin</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+        }
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #050a12;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            color: #e2e8f0;
+        }
+        #viewport {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+        /* Tactical HUD Overlays */
+        .hud-card {
+            position: absolute;
+            background: rgba(10, 17, 28, 0.88);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(0, 229, 255, 0.35);
+            border-radius: 8px;
+            padding: 10px 16px;
+            pointer-events: auto;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6);
+            z-index: 100;
+        }
+        #top-telemetry {
+            top: 15px;
+            left: 15px;
+            display: flex;
+            gap: 18px;
+            align-items: center;
+        }
+        .metric-item {
+            display: flex;
+            flex-direction: column;
+        }
+        .metric-title {
+            font-size: 10px;
+            color: #94a3b8;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            font-weight: 600;
+        }
+        .metric-val {
+            font-size: 17px;
+            font-weight: bold;
+            color: #00e5ff;
+            font-family: "Courier New", Courier, monospace;
+        }
+        .badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+        }
+        .badge-locked {
+            background: rgba(0, 255, 136, 0.2);
+            color: #00ff88;
+            border: 1px solid #00ff88;
+        }
+        .badge-coasting {
+            background: rgba(255, 165, 0, 0.25);
+            color: #ffa500;
+            border: 1px solid #ffa500;
+            animation: pulse 1s infinite alternate;
+        }
+        @keyframes pulse {
+            0% { opacity: 0.7; }
+            100% { opacity: 1.0; }
+        }
+        #cam-bar {
+            top: 15px;
+            right: 15px;
+            display: flex;
+            gap: 8px;
+        }
+        .btn-cam {
+            background: rgba(0, 229, 255, 0.12);
+            border: 1px solid rgba(0, 229, 255, 0.4);
+            color: #00e5ff;
+            padding: 7px 14px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+            transition: all 0.2s ease;
+        }
+        .btn-cam:hover, .btn-cam.active {
+            background: #00e5ff;
+            color: #050a12;
+            box-shadow: 0 0 14px rgba(0, 229, 255, 0.6);
+        }
+        #control-dock {
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+        .btn-dock {
+            background: #1e293b;
+            border: 1px solid #475569;
+            color: #f8fafc;
+            padding: 8px 18px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: background 0.2s;
+        }
+        .btn-dock:hover {
+            background: #334155;
+        }
+        .btn-dock.alert-active {
+            background: #dc2626;
+            border-color: #ef4444;
+            color: white;
+            animation: pulse 0.8s infinite alternate;
+        }
+        /* Picture-in-Picture Drone Gimbal */
+        #pip-gimbal {
+            bottom: 20px;
+            right: 20px;
+            width: 260px;
+            height: 160px;
+            background: rgba(4, 9, 16, 0.95);
+            border: 2px solid #00ff88;
+            border-radius: 8px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8);
+            z-index: 100;
+        }
+        #pip-titlebar {
+            background: rgba(0, 255, 136, 0.15);
+            padding: 4px 10px;
+            font-size: 10px;
+            font-weight: bold;
+            color: #00ff88;
+            letter-spacing: 1px;
+            display: flex;
+            justify-content: space-between;
+        }
+        #pip-viewport {
+            flex: 1;
+            position: relative;
+            background: radial-gradient(circle, #0c2133 0%, #03080e 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+        .reticle-box {
+            width: 70px;
+            height: 38px;
+            border: 2px solid #00ff88;
+            position: absolute;
+            box-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
+            transition: border-color 0.2s;
+        }
+        .reticle-dot {
+            width: 6px;
+            height: 6px;
+            background: #00ff88;
+            border-radius: 50%;
+            position: absolute;
+        }
+        #pip-glare-washout {
+            position: absolute;
+            inset: 0;
+            background: white;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.25s ease;
+        }
+        #watermark-text {
+            position: absolute;
+            bottom: 15px;
+            left: 20px;
+            font-size: 11px;
+            color: #64748b;
+            font-weight: 500;
+        }
+    </style>
+    <!-- Three.js + OrbitControls (CDN) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body>
+    <div id="viewport"></div>
+
+    <!-- Top Telemetry Panel -->
+    <div id="top-telemetry" class="hud-card">
+        <div class="metric-item">
+            <span class="metric-title">Mission Status</span>
+            <span id="badge-lock" class="badge badge-locked">LOCKED & ACCOMPANY</span>
+        </div>
+        <div class="metric-item">
+            <span class="metric-title">Yacht Speed</span>
+            <span id="val-boat-spd" class="metric-val">32.0 kts</span>
+        </div>
+        <div class="metric-item">
+            <span class="metric-title">Drone Speed</span>
+            <span id="val-drone-spd" class="metric-val">32.0 kts</span>
+        </div>
+        <div class="metric-item">
+            <span class="metric-title">Standoff Dist</span>
+            <span id="val-standoff" class="metric-val">25.0 m</span>
+        </div>
+        <div class="metric-item">
+            <span class="metric-title">Estimator Mode</span>
+            <span id="val-filter" class="metric-val" style="color: #00ff88;">CTRV EKF</span>
+        </div>
+    </div>
+
+    <!-- Camera Controls -->
+    <div id="cam-bar">
+        <button id="cam-orbit" class="btn-cam active" onclick="switchCamera('orbit')">Free 3D Orbit</button>
+        <button id="cam-chase" class="btn-cam" onclick="switchCamera('chase')">Drone Chase View</button>
+        <button id="cam-gimbal" class="btn-cam" onclick="switchCamera('gimbal')">Onboard Gimbal View</button>
+    </div>
+
+    <!-- Dock Controls -->
+    <div id="control-dock" class="hud-card">
+        <button id="btn-play-pause" class="btn-dock" onclick="togglePlayPause()">⏸️ Pause</button>
+        <button id="btn-glare-toggle" class="btn-dock" onclick="toggleGlareSpray()">🌊 Trigger Spray / Glare Burst</button>
+        <button class="btn-dock" onclick="resetMission()">🔄 Reset Flight</button>
+    </div>
+
+    <!-- Gimbal Camera PiP -->
+    <div id="pip-gimbal">
+        <div id="pip-titlebar">
+            <span>UAV GIMBAL CAM #1</span>
+            <span id="pip-lock-tag" style="color: #00ff88;">AUTOLOCK ON</span>
+        </div>
+        <div id="pip-viewport">
+            <div class="reticle-box" id="pip-reticle"></div>
+            <div class="reticle-dot"></div>
+            <div style="position: absolute; bottom: 6px; left: 8px; font-size: 9px; color: #94a3b8; font-family: monospace;">
+                NIS: 1.18 | COV: 0.04
+            </div>
+            <div id="pip-glare-washout"></div>
+        </div>
+    </div>
+
+    <div id="watermark-text">LOTUSim Maritime Digital Twin Engine | Naval Group Spec Compliant</div>
+
+    <script>
+        // --- 1. Scene, Camera, Renderer ---
+        const container = document.getElementById('viewport');
+        const width = window.innerWidth || 800;
+        const height = window.innerHeight || 600;
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x060c18);
+        scene.fog = new THREE.FogExp2(0x0a1424, 0.003);
+
+        const camera = new THREE.PerspectiveCamera(50, width / height, 0.5, 3000);
+        camera.position.set(-45, 35, 55);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(width, height);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        container.appendChild(renderer.domElement);
+
+        let controls;
+        if (typeof THREE.OrbitControls !== 'undefined') {
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.08;
+            controls.maxPolarAngle = Math.PI / 2 - 0.02;
+            controls.minDistance = 5;
+            controls.maxDistance = 250;
+        }
+
+        // --- 2. Lighting ---
+        const ambient = new THREE.AmbientLight(0x406085, 0.9);
+        scene.add(ambient);
+
+        const sun = new THREE.DirectionalLight(0xfff7ed, 1.5);
+        sun.position.set(100, 140, -60);
+        sun.castShadow = true;
+        scene.add(sun);
+
+        // --- 3. Ocean Water Grid ---
+        const oceanSize = 800;
+        const oceanSegs = 60;
+        const oceanGeo = new THREE.PlaneGeometry(oceanSize, oceanSize, oceanSegs, oceanSegs);
+        oceanGeo.rotateX(-Math.PI / 2);
+
+        const oceanMat = new THREE.MeshStandardMaterial({
+            color: 0x092238,
+            roughness: 0.12,
+            metalness: 0.8,
+            flatShading: true
+        });
+        const ocean = new THREE.Mesh(oceanGeo, oceanMat);
+        scene.add(ocean);
+
+        // --- 4. 3D Fast Yacht Model ---
+        const yachtGroup = new THREE.Group();
+        scene.add(yachtGroup);
+
+        // Hull body
+        const hullGeo = new THREE.BoxGeometry(8.5, 1.4, 3.2);
+        const hullMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.2 });
+        const hullMesh = new THREE.Mesh(hullGeo, hullMat);
+        hullMesh.position.y = 0.5;
+        yachtGroup.add(hullMesh);
+
+        // White Luxury Deck
+        const deckGeo = new THREE.BoxGeometry(8.0, 0.35, 3.0);
+        const deckMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.3 });
+        const deckMesh = new THREE.Mesh(deckGeo, deckMat);
+        deckMesh.position.y = 1.3;
+        yachtGroup.add(deckMesh);
+
+        // Aerodynamic Cabin / Tinted Windshield
+        const cabinGeo = new THREE.BoxGeometry(3.8, 1.2, 2.2);
+        const cabinMat = new THREE.MeshStandardMaterial({ color: 0x0284c7, transparent: true, opacity: 0.85, roughness: 0.1 });
+        const cabinMesh = new THREE.Mesh(cabinGeo, cabinMat);
+        cabinMesh.position.set(-0.6, 2.0, 0);
+        yachtGroup.add(cabinMesh);
+
+        // Twin Stern Engines
+        const engMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.85 });
+        const eng1 = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.9, 0.6), engMat);
+        eng1.position.set(-4.6, 0.8, 0.8);
+        const eng2 = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.9, 0.6), engMat);
+        eng2.position.set(-4.6, 0.8, -0.8);
+        yachtGroup.add(eng1);
+        yachtGroup.add(eng2);
+
+        // 3D Bounding Box Target Reticle
+        const boxReticleGeo = new THREE.BoxGeometry(9.6, 3.8, 4.4);
+        const boxReticleMat = new THREE.MeshBasicMaterial({ color: 0x00ff88, wireframe: true });
+        const targetBox3D = new THREE.Mesh(boxReticleGeo, boxReticleMat);
+        targetBox3D.position.y = 1.5;
+        yachtGroup.add(targetBox3D);
+
+        // --- 5. Expanding Wake Foam Trail ---
+        const wakeMax = 60;
+        const wakePositions = new Float32Array(wakeMax * 3);
+        const wakeGeo = new THREE.BufferGeometry();
+        wakeGeo.setAttribute('position', new THREE.BufferAttribute(wakePositions, 3));
+
+        const wakeMat = new THREE.PointsMaterial({
+            color: 0xe2e8f0,
+            size: 2.8,
+            transparent: true,
+            opacity: 0.75,
+            blending: THREE.AdditiveBlending
+        });
+        const wakeSystem = new THREE.Points(wakeGeo, wakeMat);
+        scene.add(wakeSystem);
+        const wakeTrail = [];
+
+        // --- 6. 3D Drone Model ---
+        const droneGroup = new THREE.Group();
+        scene.add(droneGroup);
+
+        // Drone Body
+        const droneBodyMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.9, roughness: 0.2 });
+        const droneBody = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.35, 1.0), droneBodyMat);
+        droneGroup.add(droneBody);
+
+        // Cross Carbon Arms
+        const armMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, metalness: 0.95 });
+        const armX = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.1, 0.1), armMat);
+        const armZ = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 3.2), armMat);
+        droneGroup.add(armX);
+        droneGroup.add(armZ);
+
+        // 4 Spinning Rotor Discs
+        const rotorGeo = new THREE.CylinderGeometry(0.65, 0.65, 0.02, 16);
+        const rotorMat = new THREE.MeshBasicMaterial({ color: 0x00e5ff, transparent: true, opacity: 0.45 });
+        const rotors = [];
+        const rotorOffsets = [
+            [1.5, 0.2, 0],
+            [-1.5, 0.2, 0],
+            [0, 0.2, 1.5],
+            [0, 0.2, -1.5]
+        ];
+        rotorOffsets.forEach(pt => {
+            const r = new THREE.Mesh(rotorGeo, rotorMat);
+            r.position.set(...pt);
+            droneGroup.add(r);
+            rotors.push(r);
+        });
+
+        // Gimbal Camera
+        const gimbalCam = new THREE.Mesh(
+            new THREE.SphereGeometry(0.25, 16, 16),
+            new THREE.MeshStandardMaterial({ color: 0x00ff88, emissive: 0x005522 })
+        );
+        gimbalCam.position.set(0.4, -0.25, 0);
+        droneGroup.add(gimbalCam);
+
+        // Optical Targeting Frustum Cone
+        const coneGeo = new THREE.ConeGeometry(9, 25, 16, 1, true);
+        coneGeo.rotateX(-Math.PI / 2);
+        const coneMat = new THREE.MeshBasicMaterial({
+            color: 0x00e5ff,
+            transparent: true,
+            opacity: 0.14,
+            side: THREE.DoubleSide,
+            blending: THREE.AdditiveBlending
+        });
+        const targetCone = new THREE.Mesh(coneGeo, coneMat);
+        scene.add(targetCone);
+
+        // --- 7. Closed Patrol Path Simulation Variables ---
+        // Using a smooth closed racetrack/lemniscate path so simulation never runs away or gets lost in fog!
+        let t = 0;
+        let isPaused = false;
+        let isSprayDropout = false;
+        let activeCamera = 'orbit';
+
+        const pathRadiusX = 85.0;
+        const pathRadiusZ = 50.0;
+        const pathSpeed = 0.22; // rad/s (~32 knots linear equivalent)
+
+        const standoffDist = 25.0;
+        const standoffAlt = 15.0;
+
+        let dronePos = new THREE.Vector3(-25, standoffAlt, 0);
+        let droneVel = new THREE.Vector3(0, 0, 0);
+
+        // EKF Estimated Target State
+        let ekfPos = new THREE.Vector3(0, 0, 0);
+        let ekfVel = new THREE.Vector3(0, 0, 0);
+
+        function updateSimulation(dt) {
+            if (isPaused) return;
+
+            t += dt * pathSpeed;
+
+            // Racetrack Lemniscate Path: smooth S-curves
+            const boatX = Math.sin(t) * pathRadiusX;
+            const boatZ = Math.sin(t * 2.0) * (pathRadiusZ * 0.5);
+
+            // Compute exact heading tangent
+            const dX = Math.cos(t) * pathRadiusX * pathSpeed;
+            const dZ = Math.cos(t * 2.0) * 2.0 * (pathRadiusZ * 0.5) * pathSpeed;
+            const boatHeading = Math.atan2(dZ, dX);
+            const linearSpeed_ms = Math.hypot(dX, dZ);
+            const linearSpeed_kts = (linearSpeed_ms * 1.94384).toFixed(1);
+
+            // Wave heave & roll
+            const waveY = Math.sin(boatX * 0.08 + t * 4.0) * 0.45;
+            const boatRoll = Math.sin(t * 3.0) * 0.12;
+
+            yachtGroup.position.set(boatX, waveY, boatZ);
+            yachtGroup.rotation.y = -boatHeading;
+            yachtGroup.rotation.z = boatRoll;
+
+            // Update Wake Trail
+            wakeTrail.unshift({ x: boatX - Math.cos(boatHeading) * 4.2, y: waveY, z: boatZ - Math.sin(boatHeading) * 4.2 });
+            if (wakeTrail.length > wakeMax) wakeTrail.pop();
+
+            const pArr = wakeGeo.attributes.position.array;
+            for (let i = 0; i < wakeTrail.length; i++) {
+                pArr[i * 3] = wakeTrail[i].x;
+                pArr[i * 3 + 1] = wakeTrail[i].y + 0.15;
+                pArr[i * 3 + 2] = wakeTrail[i].z;
+            }
+            wakeGeo.attributes.position.needsUpdate = true;
+
+            // EKF State Estimation
+            if (isSprayDropout) {
+                // Autonomous EKF Coasting: propagate forward along turn
+                ekfPos.addScaledVector(ekfVel, dt);
+            } else {
+                ekfPos.set(boatX, 0, boatZ);
+                ekfVel.set(dX, 0, dZ);
+            }
+
+            // GNC Accompany Law
+            const uFwd = new THREE.Vector3(Math.cos(boatHeading), 0, Math.sin(boatHeading));
+            const desDronePos = new THREE.Vector3()
+                .copy(ekfPos)
+                .subScaledVector(uFwd, standoffDist);
+            desDronePos.y = standoffAlt;
+
+            // PD Tracking Control
+            const posError = new THREE.Vector3().subVectors(desDronePos, dronePos);
+            const velError = new THREE.Vector3().subVectors(ekfVel, droneVel);
+
+            const kp = 1.8;
+            const kd = 0.6;
+            const vCmd = new THREE.Vector3()
+                .copy(ekfVel)
+                .addScaledVector(posError, kp)
+                .addScaledVector(velError, kd);
+
+            // Motor acceleration lag
+            const tau = 0.22;
+            droneVel.addScaledVector(new THREE.Vector3().subVectors(vCmd, droneVel), dt / tau);
+            dronePos.addScaledVector(droneVel, dt);
+
+            // Drone Banking Attitude (Roll and Pitch based on acceleration)
+            const fwdA = vCmd.x - droneVel.x;
+            const latA = vCmd.z - droneVel.z;
+            const pitch = THREE.MathUtils.clamp(-fwdA * 0.07, -0.4, 0.4);
+            const roll = THREE.MathUtils.clamp(latA * 0.07, -0.4, 0.4);
+
+            // Yaw aligns line-of-sight to yacht
+            const toBoat = new THREE.Vector3().subVectors(ekfPos, dronePos);
+            const yaw = -Math.atan2(toBoat.z, toBoat.x);
+
+            droneGroup.position.copy(dronePos);
+            droneGroup.rotation.set(pitch, yaw, roll);
+
+            // Spin rotors
+            rotors.forEach(r => r.rotation.y += 0.45);
+
+            // Target Cone projection
+            targetCone.position.copy(dronePos);
+            targetCone.lookAt(ekfPos);
+            const dist = dronePos.distanceTo(ekfPos);
+            targetCone.scale.set(dist / 25, dist / 25, dist / 25);
+
+            // Wave Surface displacement
+            const p = oceanGeo.attributes.position;
+            for (let i = 0; i < p.count; i++) {
+                const px = p.getX(i);
+                const pz = p.getZ(i);
+                const h = Math.sin(px * 0.05 + t * 3.0) * 0.5 + Math.cos(pz * 0.06 + t * 2.5) * 0.4;
+                p.setY(i, h);
+            }
+            p.needsUpdate = true;
+
+            // Camera Views
+            if (activeCamera === 'chase') {
+                const chaseOffset = new THREE.Vector3(-Math.cos(boatHeading) * 22, 10, -Math.sin(boatHeading) * 22);
+                camera.position.lerp(new THREE.Vector3().addVectors(dronePos, chaseOffset), 0.12);
+                if (controls) controls.target.lerp(yachtGroup.position, 0.12);
+            } else if (activeCamera === 'gimbal') {
+                camera.position.copy(dronePos);
+                camera.position.y -= 0.6;
+                camera.lookAt(yachtGroup.position);
+                if (controls) controls.target.copy(yachtGroup.position);
+            } else {
+                // Orbit mode keeps focus on the boat
+                if (controls) controls.target.lerp(new THREE.Vector3(boatX, 0, boatZ), 0.1);
+            }
+
+            // Update Telemetry Display
+            updateTelemetry(linearSpeed_kts, dist);
+        }
+
+        function updateTelemetry(boatKts, dist) {
+            const droneKts = (droneVel.length() * 1.94384).toFixed(1);
+            document.getElementById('val-boat-spd').innerText = boatKts + " kts";
+            document.getElementById('val-drone-spd').innerText = droneKts + " kts";
+            document.getElementById('val-standoff').innerText = dist.toFixed(1) + " m";
+
+            const badge = document.getElementById('badge-lock');
+            const reticle = document.getElementById('pip-reticle');
+            const pipTag = document.getElementById('pip-lock-tag');
+            const glareWashout = document.getElementById('pip-glare-washout');
+
+            if (isSprayDropout) {
+                badge.className = "badge badge-coasting";
+                badge.innerText = "COASTING (SPRAY/GLARE)";
+                document.getElementById('val-filter').style.color = "#ffa500";
+                document.getElementById('val-filter').innerText = "CTRV PREDICT";
+                targetCone.material.color.setHex(0xffa500);
+                boxReticleMat.color.setHex(0xffa500);
+                reticle.style.borderColor = "#ffa500";
+                reticle.style.boxShadow = "0 0 12px rgba(255, 165, 0, 0.8)";
+                pipTag.style.color = "#ffa500";
+                pipTag.innerText = "COASTING ACTIVE";
+                glareWashout.style.opacity = "0.78";
+            } else {
+                badge.className = "badge badge-locked";
+                badge.innerText = "LOCKED & ACCOMPANY";
+                document.getElementById('val-filter').style.color = "#00ff88";
+                document.getElementById('val-filter').innerText = "CTRV EKF";
+                targetCone.material.color.setHex(0x00e5ff);
+                boxReticleMat.color.setHex(0x00ff88);
+                reticle.style.borderColor = "#00ff88";
+                reticle.style.boxShadow = "0 0 10px rgba(0, 255, 136, 0.6)";
+                pipTag.style.color = "#00ff88";
+                pipTag.innerText = "AUTOLOCK ON";
+                glareWashout.style.opacity = "0.0";
+            }
+        }
+
+        // --- Controls Handlers ---
+        function switchCamera(mode) {
+            activeCamera = mode;
+            document.querySelectorAll('.btn-cam').forEach(b => b.classList.remove('active'));
+            if (mode === 'orbit') document.getElementById('cam-orbit').classList.add('active');
+            if (mode === 'chase') document.getElementById('cam-chase').classList.add('active');
+            if (mode === 'gimbal') document.getElementById('cam-gimbal').classList.add('active');
+        }
+
+        function togglePlayPause() {
+            isPaused = !isPaused;
+            document.getElementById('btn-play-pause').innerText = isPaused ? "▶️ Resume" : "⏸️ Pause";
+        }
+
+        function toggleGlareSpray() {
+            isSprayDropout = !isSprayDropout;
+            const btn = document.getElementById('btn-glare-toggle');
+            if (isSprayDropout) {
+                btn.classList.add('alert-active');
+                btn.innerText = "⚠️ Spray Glare Active (Click to Clear)";
+            } else {
+                btn.classList.remove('alert-active');
+                btn.innerText = "🌊 Trigger Spray / Glare Burst";
+            }
+        }
+
+        function resetMission() {
+            t = 0;
+            dronePos.set(-25, standoffAlt, 0);
+            droneVel.set(0, 0, 0);
+            isSprayDropout = false;
+            document.getElementById('btn-glare-toggle').classList.remove('alert-active');
+            document.getElementById('btn-glare-toggle').innerText = "🌊 Trigger Spray / Glare Burst";
+        }
+
+        window.addEventListener('resize', () => {
+            const w = window.innerWidth;
+            const h = window.innerHeight;
+            camera.aspect = w / h;
+            camera.updateProjectionMatrix();
+            renderer.setSize(w, h);
+        });
+
+        // Animation Loop
+        const clock = new THREE.Clock();
+        function renderLoop() {
+            requestAnimationFrame(renderLoop);
+            const delta = Math.min(clock.getDelta(), 0.1);
+            updateSimulation(delta);
+            if (controls) controls.update();
+            renderer.render(scene, camera);
+        }
+        renderLoop();
+    </script>
+</body>
+</html>

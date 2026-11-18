@@ -1,0 +1,171 @@
+{
+  "name": "HighSpeed_Vessel_AutoLock_Accompany",
+  "description": "Autonomous aerial drone lock-on and accompany mission on a high-speed yacht/USV under wave disturbances.",
+  "version": "1.0.0",
+  "referencePosition": {
+    "latitude": 43.12,
+    "longitude": 5.92,
+    "altitude": 0.0
+  },
+  "environment": {
+    "wind": {
+      "speed": 8.5,
+      "direction": 45.0
+    },
+    "current": {
+      "speed": 1.2,
+      "direction": 90.0
+    },
+    "waves": {
+      "significant_height": 1.25,
+      "peak_period": 5.5,
+      "direction": 45.0
+    }
+  },
+  "agents": [
+    {
+      "name": "Target_HighSpeed_Yacht",
+      "model": "high_speed_usv",
+      "domain": "surface",
+      "position": {
+        "north": 0.0,
+        "east": 0.0,
+        "altitude": 0.0
+      },
+      "heading": 0.0,
+      "linear_velocity": {
+        "u": 16.462208,
+        "v": 0.0,
+        "w": 0.0
+      },
+      "physicsInterface": {
+        "engine": "xdyn",
+        "mass": 3200.0,
+        "added_mass": [
+          [
+            120.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1850.0,
+            0.0,
+            0.0,
+            0.0,
+            420.0
+          ],
+          [
+            0.0,
+            0.0,
+            2900.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            450.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            3100.0,
+            0.0
+          ],
+          [
+            0.0,
+            420.0,
+            0.0,
+            0.0,
+            0.0,
+            2200.0
+          ]
+        ],
+        "linear_damping": [
+          -75.0,
+          -1200.0,
+          -1800.0,
+          -220.0,
+          -1400.0,
+          -980.0
+        ],
+        "quadratic_damping": [
+          -18.0,
+          -450.0,
+          -620.0,
+          -85.0,
+          -520.0,
+          -380.0
+        ]
+      },
+      "waypointInterface": {
+        "active": true,
+        "waypoints": [
+          {
+            "north": 0.0,
+            "east": 0.0,
+            "speed": 15.0
+          },
+          {
+            "north": 120.0,
+            "east": 180.0,
+            "speed": 17.0
+          },
+          {
+            "north": 280.0,
+            "east": 240.0,
+            "speed": 16.5
+          },
+          {
+            "north": 450.0,
+            "east": 150.0,
+            "speed": 18.0
+          }
+        ]
+      }
+    },
+    {
+      "name": "Surveillance_Drone",
+      "model": "quadcopter_uav",
+      "domain": "aerial",
+      "position": {
+        "north": -25.0,
+        "east": 0.0,
+        "altitude": 15.0
+      },
+      "heading": 0.0,
+      "sensors": [
+        {
+          "type": "gimbal_camera",
+          "topic": "/surveillance_drone/camera/image_raw",
+          "update_rate": 30.0,
+          "fov": 1.22,
+          "resolution": {
+            "width": 1920,
+            "height": 1080
+          }
+        },
+        {
+          "type": "gnss_ins",
+          "topic": "/surveillance_drone/nav/fix",
+          "update_rate": 50.0
+        }
+      ],
+      "controlInterface": {
+        "type": "ROS2",
+        "cmd_vel_topic": "/surveillance_drone/cmd_vel",
+        "pose_topic": "/surveillance_drone/pose"
+      }
+    }
+  ]
+}

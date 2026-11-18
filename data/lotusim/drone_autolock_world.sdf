@@ -1,0 +1,56 @@
+<?xml version="1.0" ?>
+<!--
+  LOTUSim Maritime World: High-Speed Vessel AutoLock & Accompany Mission
+  Compatible with Naval Group LOTUSim, Gazebo Fortress/Garden, and ROS 2
+-->
+<sdf version="1.9">
+  <world name="lotusim_maritime_autolock">
+    <physics name="1ms" type="ignored">
+      <max_step_size>0.002</max_step_size>
+      <real_time_factor>1.0</real_time_factor>
+    </physics>
+
+    <!-- Sun Lighting with Water Specular Glint -->
+    <light type="directional" name="sun">
+      <cast_shadows>true</cast_shadows>
+      <pose>0 0 100 0.5 0.3 0</pose>
+      <diffuse>0.9 0.9 0.95 1</diffuse>
+      <specular>0.7 0.7 0.8 1</specular>
+      <direction>-0.4 0.2 -0.9</direction>
+    </light>
+
+    <!-- Ocean Surface Plane with Wave Visuals -->
+    <model name="ocean_surface">
+      <static>true</static>
+      <link name="ocean_link">
+        <visual name="ocean_visual">
+          <geometry>
+            <plane>
+              <normal>0 0 1</normal>
+              <size>2000 2000</size>
+            </plane>
+          </geometry>
+          <material>
+            <ambient>0.05 0.15 0.25 0.9</ambient>
+            <diffuse>0.1 0.35 0.55 0.9</diffuse>
+            <specular>0.8 0.8 0.9 0.9</specular>
+          </material>
+        </visual>
+      </link>
+    </model>
+
+    <!-- LOTUSim Hydrodynamics Plugin Interface -->
+    <plugin
+      filename="libLOTUSimPhysicsEngineInterface.so"
+      name="lotusim::gazebo::PhysicsEngineInterface">
+      <ros_namespace>lotusim</ros_namespace>
+    </plugin>
+
+    <!-- Aerial MAS Entity Manager -->
+    <plugin
+      filename="libAerialMAS.so"
+      name="lotusim::gazebo::AerialMAS">
+      <aerial_namespace>aerialWorld</aerial_namespace>
+    </plugin>
+  </world>
+</sdf>
